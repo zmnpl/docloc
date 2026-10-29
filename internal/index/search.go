@@ -71,11 +71,18 @@ func (s *Store) Search(ctx context.Context, q string, mode Mode, prev *Result) (
 	res := &Result{Query: q, Mode: mode, Searched: len(s.docs)}
 
 	if len(pq.pos) == 0 && len(pq.neg) == 0 {
+		// Without a query, show the most recently modified documents first.
 		res.Hits = make([]Hit, len(s.docs))
 		for i := range s.docs {
 			res.Hits[i] = Hit{Doc: int32(i)}
 		}
-		s.sortHits(res.Hits)
+		sort.Slice(res.Hits, func(i, j int) bool {
+			a, b := s.docs[res.Hits[i].Doc], s.docs[res.Hits[j].Doc]
+			if a.ModTime != b.ModTime {
+				return a.ModTime > b.ModTime
+			}
+			return a.lowRel < b.lowRel
+		})
 		return res, nil
 	}
 

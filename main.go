@@ -26,7 +26,7 @@ func main() {
 func run() error {
 	fuzzy := flag.Bool("fuzzy", false, "start in fuzzy instead of exact matching mode")
 	hidden := flag.Bool("hidden", false, "also index hidden directories")
-	printOnly := flag.Bool("print", false, "print the selected path on enter instead of opening it")
+	printOnly := flag.Bool("print", false, "print the selected path (or folder with ctrl+f) instead of opening it")
 	cachePath := flag.String("cache", "", "cache database `path` (default: user cache dir)")
 	clearCache := flag.Bool("clear-cache", false, "delete the cache database and exit")
 	extractFile := flag.String("extract", "", "print the text extracted from `file` and exit")

@@ -40,9 +40,11 @@ join the results as they come in.
 | `pgup`/`pgdown`          | page through results                           |
 | `ctrl+u`/`ctrl+d`        | scroll preview half a page                     |
 | `shift+↑`/`shift+↓`      | scroll preview by a line                       |
+| `alt+↓`/`alt+↑` (`alt+n/p`) | jump to the next/previous match in the preview |
 | `tab`                    | switch between exact and fuzzy matching        |
 | `enter`                  | open with the default app (`xdg-open`) and quit |
 | `ctrl+o`                 | open and keep docloc running                   |
+| `ctrl+f`                 | open the containing folder                     |
 | `esc`                    | clear the query, or quit if it is empty        |
 | `ctrl+c`                 | quit                                           |
 
@@ -55,14 +57,31 @@ join the results as they come in.
   prefixes, and letters in order within a word or the file name (`tlkrchng` finds `telekom_rechnung.pdf`).
 
 Results are ranked by matches in the file name, then the path, then how often terms occur in the content.
+With an empty query, the most recently modified documents come first.
+
+### Ignoring directories
+
+A `.doclocignore` file in the searched directory lists paths to skip, one per line:
+
+```
+# a file or directory name anywhere (globs work)
+bios
+*.log.txt
+# a path relative to the searched directory
+4_Archive/RG35XX Plus
+# a trailing slash matches directories only
+tmp/
+```
+
+Hidden directories are skipped unless you pass `-hidden`.
 
 ### Flags
 
 ```
 -fuzzy          start in fuzzy mode
 -hidden         also index hidden directories (skipped by default)
--print          print the selected path on enter instead of opening it,
-                e.g. okular "$(docloc -print)"
+-print          print the selected path on enter (or its folder on ctrl+f)
+                instead of opening it, e.g. okular "$(docloc -print)"
 -cache PATH     cache database location (default ~/.cache/docloc/cache.db)
 -clear-cache    delete the cache and exit
 -extract FILE   print the text docloc extracts from FILE (for debugging)

@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
@@ -13,10 +14,10 @@ import (
 
 func testStore() *Store {
 	s := NewStore()
-	s.Add(NewDoc("steuer/2023/telekom_rechnung.pdf", "/x/1", "Telekom Deutschland GmbH\nIhre Rechnung für Oktober 2023", ""))
-	s.Add(NewDoc("steuer/2022/strom.pdf", "/x/2", "Stadtwerke Abrechnung Strom 2022", ""))
-	s.Add(NewDoc("privat/brief.docx", "/x/3", "Sehr geehrte Damen und Herren, anbei die Lohnsteuerbescheinigung.", ""))
-	s.Add(NewDoc("privat/notizen.md", "/x/4", "Telekom Hotline anrufen wegen Router", ""))
+	s.Add(NewDoc("steuer/2023/telekom_rechnung.pdf", "/x/1", 0, "Telekom Deutschland GmbH\nIhre Rechnung für Oktober 2023", ""))
+	s.Add(NewDoc("steuer/2022/strom.pdf", "/x/2", 0, "Stadtwerke Abrechnung Strom 2022", ""))
+	s.Add(NewDoc("privat/brief.docx", "/x/3", 0, "Sehr geehrte Damen und Herren, anbei die Lohnsteuerbescheinigung.", ""))
+	s.Add(NewDoc("privat/notizen.md", "/x/4", 0, "Telekom Hotline anrufen wegen Router", ""))
 	return s
 }
 
@@ -57,7 +58,7 @@ func TestExactSearch(t *testing.T) {
 func TestNarrowingIncludesNewDocs(t *testing.T) {
 	s := testStore()
 	prev, _ := s.Search(context.Background(), "tele", Exact, nil)
-	s.Add(NewDoc("neu/telefon.txt", "/x/5", "Telefonnummer", ""))
+	s.Add(NewDoc("neu/telefon.txt", "/x/5", 0, "Telefonnummer", ""))
 	r, _ := s.Search(context.Background(), "telef", Exact, prev)
 	if got := rels(s, r); !equal(got, []string{"neu/telefon.txt"}) {
 		t.Errorf("got %v", got)
@@ -283,5 +284,47 @@ func TestCompaction(t *testing.T) {
 	after, _ := os.Stat(path)
 	if after.Size() >= before.Size()/2 {
 		t.Errorf("not compacted: %d -> %d bytes", before.Size(), after.Size())
+	}
+}
+
+func TestIgnoreRules(t *testing.T) {
+	root := t.TempDir()
+	for _, rel := range []string{
+		"keep/a.txt", "bios/b.txt", "deep/x/bios/c.txt", "notes.log.txt",
+		"Archive/RG35XX/d.txt", "Archive/other/e.txt", "tmp", "dironly/f.txt",
+	} {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(rel), 0o644)
+	}
+	os.WriteFile(filepath.Join(root, IgnoreFile), []byte(
+		"# comment\n\nbios\n*.log.txt\nArchive/RG35XX\n/tmp/\ndironly/\n"), 0o644)
+	// "tmp" is a file without a supported extension, so check the
+	// directory-only rule directly.
+	rules := loadIgnore(root)
+	if rules.match("tmp", false) {
+		t.Error("directory-only rule matched a file")
+	}
+
+	s := NewStore()
+	(&Indexer{Root: root, Store: s}).Run(context.Background())
+	var got []string
+	for i := range s.Len() {
+		got = append(got, filepath.ToSlash(s.Doc(int32(i)).Rel))
+	}
+	sort.Strings(got)
+	if want := []string{"Archive/other/e.txt", "keep/a.txt"}; !equal(got, want) {
+		t.Errorf("indexed %v, want %v", got, want)
+	}
+}
+
+func TestEmptyQueryShowsRecentFirst(t *testing.T) {
+	s := NewStore()
+	s.Add(NewDoc("old.txt", "/old", 100, "", ""))
+	s.Add(NewDoc("new.txt", "/new", 300, "", ""))
+	s.Add(NewDoc("mid.txt", "/mid", 200, "", ""))
+	r, _ := s.Search(context.Background(), "  ", Exact, nil)
+	if got := rels(s, r); !equal(got, []string{"new.txt", "mid.txt", "old.txt"}) {
+		t.Errorf("got %v", got)
 	}
 }

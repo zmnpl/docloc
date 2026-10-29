@@ -61,6 +61,12 @@ type preview struct {
 	lines     []string
 	scroll    int
 	highlight []string
+	// match is the line of the current match, -1 if none. matches lists
+	// all matching lines; it is computed on the first jump only, since
+	// scanning a long document on every cursor move would be wasteful.
+	match       int
+	matches     []int
+	matchesDone bool
 }
 
 type tickMsg struct{}
@@ -207,12 +213,20 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+d":
 		m.scrollPreview(max(1, m.previewHeight()/2))
 		return m, nil
-	case "shift+up", "alt+up":
+	case "shift+up":
 		m.scrollPreview(-1)
 		return m, nil
-	case "shift+down", "alt+down":
+	case "shift+down":
 		m.scrollPreview(1)
 		return m, nil
+	case "alt+down", "alt+n":
+		m.jumpMatch(1)
+		return m, nil
+	case "alt+up", "alt+p":
+		m.jumpMatch(-1)
+		return m, nil
+	case "ctrl+f":
+		return m, m.openFolder()
 	case "tab":
 		if m.mode == index.Exact {
 			m.mode = index.Fuzzy
@@ -235,6 +249,23 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.startSearch())
 	}
 	return m, cmd
+}
+
+// openFolder opens the directory containing the selected document and
+// keeps docloc running; in PrintOnly mode it prints the directory.
+func (m *Model) openFolder() tea.Cmd {
+	d := m.store.Doc(m.selected)
+	if d == nil {
+		return nil
+	}
+	dir := filepath.Dir(d.Abs)
+	if m.opts.PrintOnly {
+		m.chosen = dir
+		return tea.Quit
+	}
+	return func() tea.Msg {
+		return openMsg{err: openFile(dir)}
+	}
 }
 
 func (m *Model) open(quit bool) tea.Cmd {
@@ -302,12 +333,65 @@ func (m *Model) syncSelection() {
 	}
 	m.pv.highlight = hl
 	m.pv.scroll = 0
+	m.pv.match, m.pv.matches, m.pv.matchesDone = -1, nil, false
 	for i, l := range m.pv.lines {
 		if containsAny(l, hl) {
+			m.pv.match = i
 			m.pv.scroll = max(0, i-2)
 			break
 		}
 	}
+}
+
+// jumpMatch moves the preview to the next (dir > 0) or previous matching
+// line, wrapping around at the ends.
+func (m *Model) jumpMatch(dir int) {
+	if !m.pv.matchesDone {
+		for i, l := range m.pv.lines {
+			if containsAny(l, m.pv.highlight) {
+				m.pv.matches = append(m.pv.matches, i)
+			}
+		}
+		m.pv.matchesDone = true
+	}
+	if len(m.pv.matches) == 0 {
+		m.flash = "no matches in this document"
+		return
+	}
+	idx := -1
+	if dir > 0 {
+		for i, l := range m.pv.matches {
+			if l > m.pv.match {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			idx = 0
+		}
+	} else {
+		for i := len(m.pv.matches) - 1; i >= 0; i-- {
+			if m.pv.matches[i] < m.pv.match {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			idx = len(m.pv.matches) - 1
+		}
+	}
+	m.pv.match = m.pv.matches[idx]
+	m.pv.scroll = max(0, m.pv.match-2)
+}
+
+// matchIndex returns the 1-based position of the current match, or 0.
+func (m *Model) matchIndex() int {
+	for i, l := range m.pv.matches {
+		if l == m.pv.match {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 func (m *Model) clampOffset() {
@@ -450,6 +534,9 @@ func (m *Model) viewPreview() string {
 		if len(m.pv.lines) > 0 {
 			pos = fmt.Sprintf(" %d/%d ", m.pv.scroll+1, len(m.pv.lines))
 		}
+		if i := m.matchIndex(); i > 0 {
+			pos = fmt.Sprintf(" match %d/%d ·%s", i, len(m.pv.matches), pos)
+		}
 	}
 	title = truncateLeft(title, max(0, m.width-lipgloss.Width(pos)-4))
 	fill := max(0, m.width-2-lipgloss.Width(title)-lipgloss.Width(pos))
@@ -491,16 +578,11 @@ func (m *Model) viewPreview() string {
 }
 
 func (m *Model) viewHelp() string {
-	verb := "open"
+	keys := []string{"↑/↓ select", "enter open", "ctrl+o open & stay", "ctrl+f folder"}
 	if m.opts.PrintOnly {
-		verb = "print"
+		keys = []string{"↑/↓ select", "enter print", "ctrl+f print folder"}
 	}
-	keys := []string{
-		"↑/↓ select", "enter " + verb, "tab exact/fuzzy", "ctrl+u/d scroll preview", "esc clear/quit",
-	}
-	if !m.opts.PrintOnly {
-		keys = append(keys[:2], append([]string{"ctrl+o open & stay"}, keys[2:]...)...)
-	}
+	keys = append(keys, "alt+↑/↓ prev/next match", "ctrl+u/d scroll", "tab exact/fuzzy", "esc clear/quit")
 	return helpStyle.Render(truncateRight(" "+strings.Join(keys, " · "), m.width))
 }
 

@@ -11,16 +11,17 @@ import (
 
 // Doc is one indexed file. It is immutable once added to a Store.
 type Doc struct {
-	Rel  string // path relative to the search root, used for display
-	Abs  string
-	Text string
-	Note string // why no text is available, if extraction failed
+	Rel     string // path relative to the search root, used for display
+	Abs     string
+	ModTime int64 // unix nanoseconds
+	Text    string
+	Note    string // why no text is available, if extraction failed
 
 	lowRel, lowName, lowText string
 }
 
-func NewDoc(rel, abs, text, note string) *Doc {
-	d := &Doc{Rel: rel, Abs: abs, Text: text, Note: note}
+func NewDoc(rel, abs string, mtime int64, text, note string) *Doc {
+	d := &Doc{Rel: rel, Abs: abs, ModTime: mtime, Text: text, Note: note}
 	d.lowRel = strings.ToLower(filepath.ToSlash(rel))
 	d.lowName = strings.ToLower(filepath.Base(rel))
 	d.lowText = strings.ToLower(text)

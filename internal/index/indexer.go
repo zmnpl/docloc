@@ -66,6 +66,7 @@ func (ix *Indexer) Run(ctx context.Context) {
 	ix.walking.Store(true)
 	var pending []job
 	seen := map[string]bool{}
+	ignore := loadIgnore(ix.Root)
 	filepath.WalkDir(ix.Root, func(p string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return filepath.SkipAll
@@ -74,23 +75,27 @@ func (ix *Indexer) Run(ctx context.Context) {
 			return nil // unreadable entry: skip it, keep walking
 		}
 		name := d.Name()
+		rel, err := filepath.Rel(ix.Root, p)
+		if err != nil {
+			rel = p
+		}
 		if d.IsDir() {
-			if p != ix.Root && strings.HasPrefix(name, ".") && !ix.Hidden {
+			if p == ix.Root {
+				return nil
+			}
+			if strings.HasPrefix(name, ".") && !ix.Hidden || ignore.match(filepath.ToSlash(rel), true) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		if !d.Type().IsRegular() || !extract.Supported(name) ||
-			strings.HasPrefix(name, "~$") || strings.HasPrefix(name, ".~lock") {
+			strings.HasPrefix(name, "~$") || strings.HasPrefix(name, ".~lock") ||
+			ignore.match(filepath.ToSlash(rel), false) {
 			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
 			return nil
-		}
-		rel, err := filepath.Rel(ix.Root, p)
-		if err != nil {
-			rel = p
 		}
 		abs, err := filepath.Abs(p)
 		if err != nil {
@@ -100,7 +105,7 @@ func (ix *Indexer) Run(ctx context.Context) {
 		seen[abs] = true
 		j := job{abs, rel, info.Size(), info.ModTime().UnixNano()}
 		if text, _, ok := ix.Cache.Lookup(abs, j.size, j.mtime); ok {
-			ix.Store.Add(NewDoc(rel, abs, text, ""))
+			ix.Store.Add(NewDoc(rel, abs, j.mtime, text, ""))
 			ix.done.Add(1)
 			return nil
 		}
@@ -168,12 +173,12 @@ func (ix *Indexer) prune(seen map[string]bool) {
 func (ix *Indexer) process(ctx context.Context, j job) {
 	hash, err := hashFile(j.abs)
 	if err != nil {
-		ix.Store.Add(NewDoc(j.rel, j.abs, "", err.Error()))
+		ix.Store.Add(NewDoc(j.rel, j.abs, j.mtime, "", err.Error()))
 		return
 	}
 	if text, ok := ix.Cache.TextByHash(hash); ok {
 		ix.Cache.Store(j.abs, j.size, j.mtime, hash, nil)
-		ix.Store.Add(NewDoc(j.rel, j.abs, text, ""))
+		ix.Store.Add(NewDoc(j.rel, j.abs, j.mtime, text, ""))
 		return
 	}
 	text, err := extractWithTimeout(ctx, j.abs)
@@ -187,7 +192,7 @@ func (ix *Indexer) process(ctx context.Context, j job) {
 	// Failures are cached too (as empty text) so broken files are not
 	// retried on every start; clear the cache to retry.
 	ix.Cache.Store(j.abs, j.size, j.mtime, hash, &text)
-	ix.Store.Add(NewDoc(j.rel, j.abs, text, note))
+	ix.Store.Add(NewDoc(j.rel, j.abs, j.mtime, text, note))
 }
 
 func hashFile(p string) (uint64, error) {
