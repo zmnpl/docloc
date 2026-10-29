@@ -1,0 +1,112 @@
+# docloc
+
+Find any document in a directory tree by name **and content**, from the terminal.
+docloc is a single, self-contained Go binary. It needs no pdftotext, fzf, ag or
+other system tools.
+
+```
+❯ rechnung telekom                                                     exact
+  50/1448
+▌ 2_Areas/Steuer/2021/Telekom/2021_Telekom_02rechnung_5621292086.pdf
+  2_Areas/Steuer/2021/Telekom/2021_Telekom_01rechnung_5621292086.pdf
+  …
+── 2_Areas/Steuer/2021/Telekom/2021_Telekom_02rechnung_5621292086.pdf ── 1/76
+ Telekom Deutschland GmbH, 53171 Bonn
+ …
+```
+
+## Build
+
+```sh
+go build -o docloc .
+```
+
+## Usage
+
+```sh
+cd ~/Documents
+docloc              # search the current directory
+docloc ~/Archive    # or any other directory
+```
+
+Indexing runs in the background while you type. Documents found in the cache
+appear almost at once; new or changed ones are extracted in parallel and
+join the results as they come in.
+
+| Key                      | Action                                         |
+|--------------------------|------------------------------------------------|
+| typing                   | search (results update as you type)            |
+| `↑`/`↓`, `ctrl+p/n`      | move through results                           |
+| `pgup`/`pgdown`          | page through results                           |
+| `ctrl+u`/`ctrl+d`        | scroll preview half a page                     |
+| `shift+↑`/`shift+↓`      | scroll preview by a line                       |
+| `tab`                    | switch between exact and fuzzy matching        |
+| `enter`                  | open with the default app (`xdg-open`) and quit |
+| `ctrl+o`                 | open and keep docloc running                   |
+| `esc`                    | clear the query, or quit if it is empty        |
+| `ctrl+c`                 | quit                                           |
+
+### Query syntax
+
+- Space-separated terms must **all** match, either in the relative path or in the content (case-insensitive).
+- `!term` excludes documents containing `term`.
+- **exact** mode (default): each term must appear as a substring.
+- **fuzzy** mode: terms also match words with typos (1 edit from 4 letters on, 2 edits from 8 letters on),
+  prefixes, and letters in order within a word or the file name (`tlkrchng` finds `telekom_rechnung.pdf`).
+
+Results are ranked by matches in the file name, then the path, then how often terms occur in the content.
+
+### Flags
+
+```
+-fuzzy          start in fuzzy mode
+-hidden         also index hidden directories (skipped by default)
+-print          print the selected path on enter instead of opening it,
+                e.g. okular "$(docloc -print)"
+-cache PATH     cache database location (default ~/.cache/docloc/cache.db)
+-clear-cache    delete the cache and exit
+-extract FILE   print the text docloc extracts from FILE (for debugging)
+```
+
+## Supported formats
+
+| Format                         | Extensions                         |
+|--------------------------------|------------------------------------|
+| PDF (text layer)               | `.pdf`                             |
+| Word                           | `.docx` `.docm` `.dotx` `.doc` `.dot` |
+| Excel                          | `.xlsx` `.xlsm` `.xls`             |
+| LibreOffice / OpenDocument     | `.odt` `.ott` `.ods` `.ots` `.fodt` `.fods` |
+| Rich text                      | `.rtf` (also `.doc` files that are really RTF) |
+| Plain text                     | `.txt` `.text` `.md` `.markdown`   |
+
+Up to 1 MiB of text is indexed per document. Spreadsheet dates come out as
+`YYYY-MM-DD` so you can search for them.
+
+Limitations:
+
+- Scanned PDFs without a text layer can only be found by file name (there is no OCR).
+  PDFs OCR'd with e.g. OCRmyPDF work fine.
+- Legacy `.doc` (Word 97–2003) support is best effort and handles only the main text.
+  Encrypted `.doc` files and files from Word 6/95 are skipped.
+- `.xls` must be BIFF8 (Excel 97 or newer).
+- Files that fail to extract can still be found by name. The preview says why there is no text.
+
+## How it works
+
+- **Cache**: a bbolt database maps each file's content hash (xxhash) to its
+  extracted text, so moved or copied documents are not processed again. A
+  second bucket remembers size and mtime per path, which lets an unchanged file
+  skip hashing. Like fast-p, known documents are loaded first, then the new
+  ones are extracted.
+- **Search** runs in a background goroutine and is cancelled when you keep typing.
+  Typing more of the same query narrows the previous results instead of
+  searching everything again. Fuzzy mode uses an in-memory inverted word index.
+- **PDF** text is read with a vendored, patched copy of
+  [ledongthuc/pdf](https://github.com/ledongthuc/pdf) (see
+  `third_party/pdf/PATCHES.md`). docloc runs its own content-stream walker on
+  top of it. The walker follows form XObjects and uses real glyph widths, CID
+  fonts included, to find word and line breaks.
+- **Office** formats are parsed directly: OOXML and ODF via `encoding/xml`,
+  legacy `.doc`/`.xls` via the compound file reader
+  [mscfb](https://github.com/richardlehane/mscfb) plus small decoders for the
+  Word piece table and the BIFF8 records.

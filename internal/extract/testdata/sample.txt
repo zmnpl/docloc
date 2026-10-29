@@ -1,0 +1,4 @@
+Grüße aus Köln
+
+Das ist ein Testdokument mit Umlauten: äöüß und Euro €.
+Zweite Zeile mit Rechnungsnummer 4711.
