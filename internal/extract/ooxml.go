@@ -117,6 +117,50 @@ func wordXMLText(r io.Reader, b *strings.Builder) error {
 	return nil
 }
 
+// pptxText extracts the text of all slides of a PowerPoint 2007+
+// presentation in slide order, followed by the speaker notes.
+func pptxText(p string) (string, error) {
+	zr, err := zip.OpenReader(p)
+	if err != nil {
+		return "", err
+	}
+	defer zr.Close()
+
+	var slides, notes []string
+	for _, f := range zr.File {
+		switch {
+		case strings.HasPrefix(f.Name, "ppt/slides/slide") && strings.HasSuffix(f.Name, ".xml"):
+			slides = append(slides, f.Name)
+		case strings.HasPrefix(f.Name, "ppt/notesSlides/notesSlide") && strings.HasSuffix(f.Name, ".xml"):
+			notes = append(notes, f.Name)
+		}
+	}
+	sort.Slice(slides, func(i, j int) bool { return naturalLess(slides[i], slides[j]) })
+	sort.Slice(notes, func(i, j int) bool { return naturalLess(notes[i], notes[j]) })
+
+	var b strings.Builder
+	for i, name := range append(slides, notes...) {
+		rc, err := openZipMember(zr, name)
+		if err != nil {
+			continue
+		}
+		if i < len(slides) {
+			b.WriteString("## Slide " + strconv.Itoa(i+1) + "\n")
+		} else if i == len(slides) {
+			b.WriteString("## Notes\n")
+		}
+		// DrawingML uses the same <a:p>/<a:t> structure that the Word
+		// parser understands.
+		wordXMLText(rc, &b)
+		rc.Close()
+		b.WriteString("\n")
+		if b.Len() >= MaxText {
+			break
+		}
+	}
+	return b.String(), nil
+}
+
 // xlsxText extracts the cell contents of all sheets of an Excel 2007+ workbook.
 func xlsxText(p string) (string, error) {
 	zr, err := zip.OpenReader(p)

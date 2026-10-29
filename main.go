@@ -32,7 +32,8 @@ func run() error {
 	extractFile := flag.String("extract", "", "print the text extracted from `file` and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: docloc [flags] [directory]\n\n"+
-			"Search pdf, doc(x), xls(x), odt, ods, rtf, txt and md documents by name and content.\n\n")
+			"Search pdf, doc(x), xls(x), pptx, odt/ods/odp, rtf, html, epub, csv, txt and md\n"+
+			"documents by name and content.\n\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()

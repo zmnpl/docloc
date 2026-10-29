@@ -75,9 +75,12 @@ Results are ranked by matches in the file name, then the path, then how often te
 | PDF (text layer)               | `.pdf`                             |
 | Word                           | `.docx` `.docm` `.dotx` `.doc` `.dot` |
 | Excel                          | `.xlsx` `.xlsm` `.xls`             |
-| LibreOffice / OpenDocument     | `.odt` `.ott` `.ods` `.ots` `.fodt` `.fods` |
+| PowerPoint (slides + notes)    | `.pptx` `.pptm`                    |
+| LibreOffice / OpenDocument     | `.odt` `.ott` `.ods` `.ots` `.odp` `.otp` `.fodt` `.fods` |
 | Rich text                      | `.rtf` (also `.doc` files that are really RTF) |
-| Plain text                     | `.txt` `.text` `.md` `.markdown`   |
+| Web pages                      | `.html` `.htm` `.xhtml`            |
+| E-books                        | `.epub` (chapters in reading order) |
+| Plain text / tables            | `.txt` `.text` `.md` `.markdown` `.csv` `.tsv` |
 
 Up to 1 MiB of text is indexed per document. Spreadsheet dates come out as
 `YYYY-MM-DD` so you can search for them.
@@ -106,6 +109,7 @@ Limitations:
   `third_party/pdf/PATCHES.md`). docloc runs its own content-stream walker on
   top of it. The walker follows form XObjects and uses real glyph widths, CID
   fonts included, to find word and line breaks.
+- **HTML/EPUB** text comes from `golang.org/x/net/html`, which also detects the character set.
 - **Office** formats are parsed directly: OOXML and ODF via `encoding/xml`,
   legacy `.doc`/`.xls` via the compound file reader
   [mscfb](https://github.com/richardlehane/mscfb) plus small decoders for the
