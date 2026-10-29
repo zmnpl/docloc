@@ -360,28 +360,33 @@ func (m *Model) viewInput() string {
 	return in + strings.Repeat(" ", gap) + badge
 }
 
+// viewStatus renders the counts and indexing progress as a thin rule,
+// matching the preview header.
 func (m *Model) viewStatus() string {
 	total := m.store.Len()
 	hits := 0
 	if m.res != nil {
 		hits = len(m.res.Hits)
 	}
-	s := statusStyle.Render(fmt.Sprintf("  %d/%d", hits, total))
+	s := borderStyle.Render("──") + statusStyle.Render(fmt.Sprintf(" %d/%d ", hits, total))
 	p := m.ix.Progress()
 	switch {
 	case p.Walking:
-		s += statusStyle.Render(fmt.Sprintf("  %s scanning… %d files found", spinner[m.frame%len(spinner)], p.Found))
+		s += statusStyle.Render(fmt.Sprintf(" %s scanning… %d files found ", spinner[m.frame%len(spinner)], p.Found))
 	case !p.Finished:
-		s += statusStyle.Render(fmt.Sprintf("  %s indexing %d/%d", spinner[m.frame%len(spinner)], p.Done, p.Found))
+		s += statusStyle.Render(fmt.Sprintf(" %s indexing %d/%d ", spinner[m.frame%len(spinner)], p.Done, p.Found))
 	}
 	if m.searching {
-		s += statusStyle.Render("  searching…")
+		s += statusStyle.Render(" searching… ")
 	}
 	if m.opts.Warning != "" {
-		s += "  " + warnStyle.Render(m.opts.Warning)
+		s += " " + warnStyle.Render(m.opts.Warning) + " "
 	}
 	if m.flash != "" {
-		s += "  " + warnStyle.Render(m.flash)
+		s += " " + warnStyle.Render(m.flash) + " "
+	}
+	if fill := m.width - lipgloss.Width(s); fill > 0 {
+		s += borderStyle.Render(strings.Repeat("─", fill))
 	}
 	return truncateRight(s, m.width)
 }
