@@ -137,3 +137,8 @@ Limitations:
   legacy `.doc`/`.xls` via the compound file reader
   [mscfb](https://github.com/richardlehane/mscfb) plus small decoders for the
   Word piece table and the BIFF8 records.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The vendored PDF library in `third_party/pdf`
+keeps its original BSD license ([third_party/pdf/LICENSE](third_party/pdf/LICENSE)).
