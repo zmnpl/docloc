@@ -97,10 +97,14 @@ Limitations:
 ## How it works
 
 - **Cache**: a bbolt database maps each file's content hash (xxhash) to its
-  extracted text, so moved or copied documents are not processed again. A
-  second bucket remembers size and mtime per path, which lets an unchanged file
-  skip hashing. Like fast-p, known documents are loaded first, then the new
-  ones are extracted.
+  extracted text, deflate-compressed (about 3× smaller), so moved or copied
+  documents are not processed again. A second bucket remembers size and mtime
+  per path, which lets an unchanged file skip hashing. Like fast-p, known
+  documents are loaded first, then the new ones are extracted. After a
+  complete run, entries for deleted files below the searched directory are
+  pruned, along with texts no file refers to. Entries from other directories
+  you searched are kept. When most of the file is unused space, it gets
+  compacted on the next start.
 - **Search** runs in a background goroutine and is cancelled when you keep typing.
   Typing more of the same query narrows the previous results instead of
   searching everything again. Fuzzy mode uses an in-memory inverted word index.

@@ -32,6 +32,10 @@ type Indexer struct {
 	found, done atomic.Int64
 	walking     atomic.Bool
 	finished    atomic.Bool
+
+	// Pruned reports how many stale cache entries (files, texts) the run
+	// removed; valid once Progress().Finished is set.
+	PrunedFiles, PrunedTexts int
 }
 
 type Progress struct {
@@ -61,6 +65,7 @@ func (ix *Indexer) Run(ctx context.Context) {
 	defer ix.finished.Store(true)
 	ix.walking.Store(true)
 	var pending []job
+	seen := map[string]bool{}
 	filepath.WalkDir(ix.Root, func(p string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return filepath.SkipAll
@@ -92,6 +97,7 @@ func (ix *Indexer) Run(ctx context.Context) {
 			abs = p
 		}
 		ix.found.Add(1)
+		seen[abs] = true
 		j := job{abs, rel, info.Size(), info.ModTime().UnixNano()}
 		if text, _, ok := ix.Cache.Lookup(abs, j.size, j.mtime); ok {
 			ix.Store.Add(NewDoc(rel, abs, text, ""))
@@ -126,6 +132,37 @@ func (ix *Indexer) Run(ctx context.Context) {
 	}
 	close(jobs)
 	wg.Wait()
+
+	// Only a complete run knows which files are gone.
+	if ctx.Err() == nil {
+		ix.prune(seen)
+	}
+}
+
+// prune removes cache entries for files below the root that no longer exist.
+func (ix *Indexer) prune(seen map[string]bool) {
+	root, err := filepath.Abs(ix.Root)
+	if err != nil {
+		return
+	}
+	keep := func(p string) bool {
+		if ix.Hidden {
+			return false
+		}
+		// Files in hidden directories were skipped, not deleted.
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return true
+		}
+		dirs := strings.Split(filepath.Dir(rel), string(filepath.Separator))
+		for _, d := range dirs {
+			if strings.HasPrefix(d, ".") && d != "." {
+				return true
+			}
+		}
+		return false
+	}
+	ix.PrunedFiles, ix.PrunedTexts, _ = ix.Cache.Prune(root, seen, keep)
 }
 
 func (ix *Indexer) process(ctx context.Context, j job) {
