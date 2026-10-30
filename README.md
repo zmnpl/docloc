@@ -1,3 +1,7 @@
+# diclaimer
+
+Completely vibe coded little tool for learning purposes and also personaly usage. Always wanted do do this myself but was too lazy. Now it lives and works fine for what I wanted.
+
 # docloc
 
 Find any document in a directory tree by name **and content**, from the terminal.
@@ -7,11 +11,11 @@ other system tools.
 ```
 ❯ rechnung telekom                                                     exact
   50/1448
-▌ 2_Areas/Steuer/2021/Telekom/2021_Telekom_02rechnung_5621292086.pdf
-  2_Areas/Steuer/2021/Telekom/2021_Telekom_01rechnung_5621292086.pdf
+▌ 2_Areas/Steuer/2021/rechnung_5621292086.pdf
+  2_Areas/Steuer/2021/rechnung_5621292086.pdf
   …
-── 2_Areas/Steuer/2021/Telekom/2021_Telekom_02rechnung_5621292086.pdf ── 1/76
- Telekom Deutschland GmbH, 53171 Bonn
+── 2_Areas/Steuer/2021/rechnung_5621292086.pdf ── 1/76
+ Irgendeine Rechnung ...
  …
 ```
 
@@ -68,7 +72,7 @@ A `.doclocignore` file in the searched directory lists paths to skip, one per li
 bios
 *.log.txt
 # a path relative to the searched directory
-4_Archive/RG35XX Plus
+4_Archive/something_to_ignore
 # a trailing slash matches directories only
 tmp/
 ```
